@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="PT-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busca de Musicas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .search-bar {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .search-bar input {
+            padding: 10px;
+            width: 50%;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        .search-bar button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        .music-list {
+            list-style: none;
+            padding: 0;
+        }
+        .music-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .music-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            margin-right: 20px;
+        }
+        .music-info {
+            flex: 1;
+        }
+        .music-info p {
+            margin: 5px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        .music-info .title {
+            font-weight: bold;
+        }
+        .music-info .artist {
+            color: #777;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        .controls button {
+            margin-right: 10px;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .progress-bar-container {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .progress-bar-container input[type="range"] {
+            width: 100%;
+        }
+        .unavailable {
+            color: red;
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Resultados da Busca de Musicas</h1>
+        <!-- Barra de Pesquisa -->
+        <div class="search-bar">
+            <input type="text" id="searchQuery" placeholder="Digite o nome da musica ou artista">
+            <button onclick="searchMusic()">Buscar</button>
+        </div>
+        
+        <ul class="music-list" id="musicList">
+            <!-- Resultados serão inseridos aqui -->
+        </ul>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        let players = {};  // Armazena os players do YouTube
+        let updateIntervals = {}; // Armazena os intervalos de atualização para cada player
+
+        // Função para buscar e exibir músicas
+        async function fetchMusic() {
+            try {
+                const response = await fetch('/search/');
+                const data = await response.json();
+                displayMusicResults(data);
+            } catch (error) {
+                console.error('Erro ao buscar músicas:', error);
+            }
+        }
+
+        // Função para exibir resultados da busca
+        function displayMusicResults(data) {
+            const musicList = document.getElementById('musicList');
+            musicList.innerHTML = ''; // Limpa a lista de músicas
+            
+            if (data.music && data.music.length > 0) {
+                data.music.forEach((musica, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'music-item';
+                    
+                    const thumbnail = document.createElement('img');
+                    thumbnail.src = musica.thumbnail;
+                    listItem.appendChild(thumbnail);
+                    
+                    const musicInfo = document.createElement('div');
+                    musicInfo.className = 'music-info';
+                    
+                    const title = document.createElement('p');
+                    title.className = 'title';
+                    title.innerText = musica.title;
+                    musicInfo.appendChild(title);
+                    
+                    const artist = document.createElement('p');
+                    artist.className = 'artist';
+                    artist.innerText = `Artista: ${musica.artist}`;
+                    musicInfo.appendChild(artist);
+                    
+                    listItem.appendChild(musicInfo);
+
+                    // Criar controles (Play, Pause, Barra de progresso)
+                    const controls = document.createElement('div');
+                    controls.className = 'controls';
+
+                    const playButton = document.createElement('button');
+                    playButton.innerText = 'Play';
+                    playButton.onclick = () => playVideo(index);
+
+                    const pauseButton = document.createElement('button');
+                    pauseButton.innerText = 'Pause';
+                    pauseButton.onclick = () => pauseVideo(index);
+
+                    controls.appendChild(playButton);
+                    controls.appendChild(pauseButton);
+
+                    listItem.appendChild(controls);
+
+                    // Barra de progresso
+                    const progressBarContainer = document.createElement('div');
+                    progressBarContainer.className = 'progress-bar-container';
+
+                    const progressBar = document.createElement('input');
+                    progressBar.type = 'range';
+                    progressBar.min = '0';
+                    progressBar.max = '100';
+                    progressBar.value = '0';
+                    progressBar.id = `progressBar_${index}`;
+                    progressBar.oninput = (event) => seekVideo(index, event.target.value);
+
+                    progressBarContainer.appendChild(progressBar);
+                    listItem.appendChild(progressBarContainer);
+
+                    // Elemento do player YouTube (oculto)
+                    const playerContainer = document.createElement('div');
+                    playerContainer.id = `player_${index}`;
+                    playerContainer.style.display = 'none';
+                    listItem.appendChild(playerContainer);
+
+                    musicList.appendChild(listItem);
+
+                    // Inicializar player do YouTube
+                    createYouTubePlayer(index, musica.id);
+                });
+            } else {
+                musicList.innerHTML = '<p>Nenhuma música encontrada.</p>';
+            }
+        }
+
+        // Função para criar o player do YouTube
+        function createYouTubePlayer(index, videoId) {
+            players[index] = new YT.Player(`player_${index}`, {
+                videoId: videoId,
+                events: {
+                    'onReady': () => console.log(`Player ${index} pronto.`),
+                    'onError': () => {
+                        const listItem = document.getElementById(`player_${index}`).parentElement;
+                        const errorMessage = document.createElement('p');
+                        errorMessage.className = 'unavailable';
+                        errorMessage.innerText = 'Indisponivel';
+                        listItem.appendChild(errorMessage);
+                    }
+                }
+            });
+        }
+
+        // Função para reproduzir o vídeo
+        function playVideo(index) {
+            const player = players[index];
+            if (player) {
+                player.playVideo();
+                updateProgressBar(index); // Atualiza a barra de progresso ao iniciar o vídeo
+            }
+        }
+
+        // Função para pausar o vídeo
+        function pauseVideo(index) {
+            const player = players[index];
+            if (player) {
+                player.pauseVideo();
+                clearInterval(updateIntervals[index]); // Para a atualização da barra de progresso
+            }
+        }
+
+        // Função para atualizar a barra de progresso
+        function updateProgressBar(index) {
+            const player = players[index];
+            if (player) {
+                const progressBar = document.getElementById(`progressBar_${index}`);
+                clearInterval(updateIntervals[index]); // Limpa intervalos anteriores
+                updateIntervals[index] = setInterval(() => {
+                    if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+                        const currentTime = player.getCurrentTime();
+                        const duration = player.getDuration();
+                        if (duration > 0) {
+                            progressBar.value = (currentTime / duration) * 100;
+                        }
+                    } else {
+                        clearInterval(updateIntervals[index]); // Para a atualização se o vídeo não estiver tocando
+                    }
+                }, 500); // Atualiza a cada meio segundo
+            }
+        }
+
+        // Função para mover o vídeo para uma posição específica
+        function seekVideo(index, value) {
+            const player = players[index];
+            if (player) {
+                const duration = player.getDuration();
+                const seekTo = (value / 100) * duration;
+                player.seekTo(seekTo);
+            }
+        }
+
+        // Função para buscar músicas com base no termo de pesquisa
+        async function searchMusic() {
+            const query = document.getElementById('searchQuery').value;
+            
+            if (!query) {
+                alert('Por favor, digite um termo de busca.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/search/?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                displayMusicResults(data);
+            } catch (error) {
+                console.error('Erro ao buscar músicas:', error);
+            }
+        }
+
+        // Buscar músicas automaticamente quando a página carregar
+        window.onload = fetchMusic;
+    </script>
+
+    
+</body>
+</html>
