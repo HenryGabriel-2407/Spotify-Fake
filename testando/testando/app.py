@@ -1,53 +1,107 @@
-# importando todas as bibliotecas
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from ytmusicapi import YTMusic
-
 from testando.schemas import Musica, Musicas
 
-# inicializando
+import base64
+import requests
+import random
+
+
+# Inicializando o fastapi
 app = FastAPI()
 
-lista_musica = []
+# Informações de autenticação do Spotify
+client_id = "03d8c173d4dc4b2fadfc95c767e82645"
+client_secret = "1fc63f29ccfd4a0e8d5769073a137964"
 
-yt = YTMusic({
- "scope": "https://www.googleapis.com/auth/youtube",
- "token_type": "Bearer",
- "access_token": "ya29.a0AcM612xzwRSW1ZhBuU-3BVtrL--cF0fXLdObStFDlDrE7cEqSGeCVd9N5UgEB-V9BnOIgMpT1dRSlMIv0xde73-SsoEy-v5ptlkqCsslvI-GBLUOV1HsX-z0AvwZiyKUi8fZF3HW5o86PbLBANNHgyWfuDEEdVaCtoZIyku5sHTPI33b-v59aCgYKAXASARASFQHGX2Mis-ZJCPqaxO8tKr6fqLrA0w0187",
- "refresh_token": "1//0hh-ATI_R3kJxCgYIARAAGBESNwF-L9IrzCYfkWIOwjLI9K9PpxSboqoK9fJpFecNOc171sGRbG_6DtmzqATGoWkZQypY-JBuINo",
- "expires_at": 1725279178,
- "expires_in": 72508
-})
+# URL para obter o token de acesso
+token_url = "https://accounts.spotify.com/api/token"
+
+# Codificar credenciais em Base64
+credentials = f"{client_id}:{client_secret}"
+encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+# Definir os parâmetros e cabeçalhos para obter o token
+data = {
+    'grant_type': 'client_credentials'
+}
+headers = {
+    'Authorization': f'Basic {encoded_credentials}',
+    'Content-Type': 'application/x-www-form-urlencoded'
+}
 
 # Configurar a pasta estática
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
-
 
 @app.get("/", response_class=HTMLResponse)
 def serve_html():
     with open("templates/index.html") as f:
         return HTMLResponse(content=f.read())
 
+def get_access_token():
+    response = requests.post(token_url, headers=headers, data=data)
+    if response.status_code == 200:
+        token_info = response.json()
+        return token_info['access_token']
+    else:
+        return None
 
 @app.get("/search/", response_model=Musicas)
-def buscar_musica(q: str = Query(None, description="Nome da musica ou artista a ser buscado")):
-    result = yt.search(q)
-    lista_musica.clear()
-    if result:
-        for i in range(len(result)):
-            if result[i]['category'] == "Videos" or result[i]['resultType'] == "song":
-                id_musica = str(result[i]['videoId'])
-                title = str(result[i]['title'])
-                # Verifica se há mais de um artista antes de tentar acessar o segundo
-                if 'artists' in result[i] and len(result[i]['artists']) > 1:
-                    artist = str(result[i]['artists'][1]['name'])
-                else:
-                    artist = str(result[i]['artists'][0]['name'])  # Pega o primeiro artista se não houver um segundo
-                thumbnail_url = str(result[i]['thumbnails'][0]['url'])
-                musica = Musica(id=id_musica, thumbnail=thumbnail_url, title=title, artist=artist)
-                lista_musica.append(musica)
+def buscar_musica(q: str = Query(None, description="Nome da música ou artista a ser buscado")):
+    access_token = get_access_token() #vai verificar se o usuário possui acesso
+    if not access_token:
+        return Musicas(musicas=[])
 
-    return {'music': lista_musica}
+    search_headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    
+    results = []
 
-# fastapi dev testando/app.py --host 0.0.0.0
+    # Buscar por músicas
+    search_params = {
+        'q': f'track:"{q}"',
+        'type': 'track',
+        'limit': 20
+    }
+    search_url = "https://api.spotify.com/v1/search"
+    response = requests.get(search_url, headers=search_headers, params=search_params)
+    
+    if response.status_code == 200:
+        search_results = response.json()
+        tracks = search_results.get('tracks', {}).get('items', [])
+        
+        if tracks:
+            results.extend([Musica(link=f"https://open.spotify.com/embed/track/{track['id']}") for track in tracks])
+
+    # Buscar por artistas
+    search_params = {
+        'q': q,
+        'type': 'artist',
+        'limit': 5 
+    }
+    response = requests.get(search_url, headers=search_headers, params=search_params)
+    
+    if response.status_code == 200:
+        search_results = response.json()
+        artists = search_results.get('artists', {}).get('items', [])
+        
+        if artists:
+            artist_id = artists[0]['id']
+            # Buscar as músicas do artista
+            tracks_params = {
+                'limit': 20
+            }
+            tracks_url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks"
+            response = requests.get(tracks_url, headers=search_headers, params=tracks_params)
+            
+            if response.status_code == 200:
+                tracks_results = response.json()
+                tracks = tracks_results.get('tracks', [])
+                
+                results.extend([Musica(link=f"https://open.spotify.com/embed/track/{track['id']}") for track in tracks])
+
+    # Embaralhar a lista de resultados antes de retornar
+    random.shuffle(results)
+    return Musicas(musicas=results)

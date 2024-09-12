@@ -4,11 +4,8 @@ from pydantic import BaseModel
 
 
 class Musica(BaseModel):
-    id: str
-    title: str
-    artist: str
-    thumbnail: str
+    link: str
 
 
 class Musicas(BaseModel):
-    music: List[Musica]
+    musicas: List[Musica]
