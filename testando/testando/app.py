@@ -31,14 +31,17 @@ headers = {
     'Content-Type': 'application/x-www-form-urlencoded'
 }
 
+
 # Configurar a pasta estática
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
+# Abrir o arquivo HTML onde o user vai pesquisar e ouvir músicas
 @app.get("/", response_class=HTMLResponse)
 def serve_html():
     with open("templates/index.html") as f:
         return HTMLResponse(content=f.read())
 
+# Função para verificar se o user possui autorização de uso
 def get_access_token():
     response = requests.post(token_url, headers=headers, data=data)
     if response.status_code == 200:
@@ -47,9 +50,10 @@ def get_access_token():
     else:
         return None
 
+
 @app.get("/search/", response_model=Musicas)
 def buscar_musica(q: str = Query(None, description="Nome da música ou artista a ser buscado")):
-    access_token = get_access_token() #vai verificar se o usuário possui acesso
+    access_token = get_access_token() 
     if not access_token:
         return Musicas(musicas=[])
 
@@ -57,6 +61,7 @@ def buscar_musica(q: str = Query(None, description="Nome da música ou artista a
         'Authorization': f'Bearer {access_token}'
     }
     
+    # lista de músicas
     results = []
 
     # Buscar por músicas
@@ -68,10 +73,10 @@ def buscar_musica(q: str = Query(None, description="Nome da música ou artista a
     search_url = "https://api.spotify.com/v1/search"
     response = requests.get(search_url, headers=search_headers, params=search_params)
     
+    # a pesquisa (GET) retornou 200?
     if response.status_code == 200:
         search_results = response.json()
         tracks = search_results.get('tracks', {}).get('items', [])
-        
         if tracks:
             results.extend([Musica(link=f"https://open.spotify.com/embed/track/{track['id']}") for track in tracks])
 
