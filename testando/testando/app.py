@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from testando.schemas import Musica, Musicas
@@ -33,13 +33,17 @@ headers = {
 
 
 # Configurar a pasta estática
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
-# Abrir o arquivo HTML onde o user vai pesquisar e ouvir músicas
 @app.get("/", response_class=HTMLResponse)
 def serve_html():
-    with open("templates/index.html") as f:
-        return HTMLResponse(content=f.read())
+    try:
+        with open("templates/index.html", encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content, media_type="text/html; charset=UTF-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar a página: {e}")
 
 # Função para verificar se o user possui autorização de uso
 def get_access_token():
