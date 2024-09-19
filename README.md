@@ -48,3 +48,8 @@ Recomendo que antes do poetry update escrever o seu arquivo .toml semelhante a m
 ### Diagrama de Caso de Uso:
 
 ![image (1)](https://github.com/user-attachments/assets/2fb458e1-4939-46ee-ba81-13817f7ec0ec)
+
+### Diagrama de Classe:
+
+![image](https://github.com/user-attachments/assets/62cb9117-6a28-438d-ab6e-05783b017602)
+
