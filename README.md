@@ -1,6 +1,8 @@
 # Spotify Fake
  Trabalho de Engenharia de Software
 
+ Alunos: Alessandra Bregadioli, Guilherme Brai, Henry Gabriel e Yago Lima.
+
 ## Antes de tudo...
  Primeiro passo vai criar e inicializar um ambiente virtual para este projeto
  - ```pip install poetry```
